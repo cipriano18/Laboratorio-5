@@ -47,7 +47,7 @@ class _SuccessScreenState extends State<SuccessScreen>
     return Scaffold(
       backgroundColor: colorScheme.surface,
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(28),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -153,6 +153,7 @@ class _SuccessScreenState extends State<SuccessScreen>
           ),
         ),
       ),
+
     );
   }
 }

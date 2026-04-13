@@ -37,65 +37,16 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
     setState(() => _isLoading = false);
 
-    // Show OTP in dialog (demo simulation)
-    await showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Icon(Icons.info_outline,
-                color: Theme.of(ctx).colorScheme.primary),
-            const SizedBox(width: 8),
-            const Text('Modo Demo'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'En una app real este código llegaría a tu correo. Tu código OTP es:',
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              decoration: BoxDecoration(
-                color: Theme.of(ctx).colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                session.code,
-                style: TextStyle(
-                  fontSize: 36,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 8,
-                  color: Theme.of(ctx).colorScheme.onPrimaryContainer,
-                  fontFamily: 'monospace',
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Expira en 2 minutos',
-              style: TextStyle(
-                color: Theme.of(ctx).colorScheme.outline,
-                fontSize: 13,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          ElevatedButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Entendido'),
-          ),
-        ],
+    // Show OTP in snackbar (demo simulation) and navigate immediately
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Demo — Tu OTP es: ${session.code}'),
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 10),
       ),
     );
 
-    if (!mounted) return;
     Navigator.pushNamed(context, '/otp');
   }
 

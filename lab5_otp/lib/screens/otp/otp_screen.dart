@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:sms_autofill/sms_autofill.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/utils/validators.dart';
 import '../../providers/otp_provider.dart';
@@ -13,9 +14,67 @@ class OtpScreen extends StatefulWidget {
   State<OtpScreen> createState() => _OtpScreenState();
 }
 
-class _OtpScreenState extends State<OtpScreen> {
+// CodeAutoFill: mixin de sms_autofill que escucha SMS entrante y llama
+// a codeUpdated() cuando detecta un código OTP.
+class _OtpScreenState extends State<OtpScreen> with CodeAutoFill {
   final _otpFieldKey = GlobalKey<OtpInputFieldState>();
   bool _isComplete = false;
+  bool _autoFilled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _startSmsListener();
+    _simulateAutoFill();
+  }
+
+  /// Activa el listener de SMS real usando el SMS Retriever API de Google.
+  /// Si llega un SMS con el código, codeUpdated() lo captura automáticamente.
+  Future<void> _startSmsListener() async {
+    await SmsAutoFill().listenForCode();
+  }
+
+  /// Simulación para demo: rellena las cajas a los 3 segundos como si
+  /// hubiera llegado un SMS real con el código generado.
+  void _simulateAutoFill() {
+    Future.delayed(const Duration(seconds: 3), () {
+      if (!mounted || _autoFilled) return;
+      final session = context.read<OtpProvider>().session;
+      if (session != null && !session.isExpired) {
+        _fillCode(session.code);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.sms, color: Colors.white, size: 18),
+                SizedBox(width: 8),
+                Text('Código detectado automáticamente desde SMS'),
+              ],
+            ),
+            backgroundColor: Colors.green.shade700,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    });
+  }
+
+  /// Llamado por el mixin cuando llega un SMS real con un código OTP.
+  @override
+  void codeUpdated() {
+    if (!mounted || _autoFilled) return;
+    final detectedCode = code ?? '';
+    if (detectedCode.length == AppConstants.otpLength) {
+      _fillCode(detectedCode);
+    }
+  }
+
+  void _fillCode(String detectedCode) {
+    _autoFilled = true;
+    _otpFieldKey.currentState?.fillCode(detectedCode);
+    setState(() => _isComplete = true);
+  }
 
   void _onOtpChanged() {
     final current = _otpFieldKey.currentState?.currentValue ?? '';
@@ -37,7 +96,7 @@ class _OtpScreenState extends State<OtpScreen> {
         break;
       case ValidationResult.wrongCode:
         _otpFieldKey.currentState?.clear();
-        setState(() => _isComplete = false);
+        setState(() { _isComplete = false; _autoFilled = false; });
         final remaining = provider.attemptsRemaining;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -92,7 +151,9 @@ class _OtpScreenState extends State<OtpScreen> {
     final provider = context.read<OtpProvider>();
     final session = provider.resendOtp();
     _otpFieldKey.currentState?.clear();
-    setState(() => _isComplete = false);
+    setState(() { _isComplete = false; _autoFilled = false; });
+    // Reiniciar el listener de SMS para el nuevo código
+    SmsAutoFill().listenForCode();
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -102,6 +163,15 @@ class _OtpScreenState extends State<OtpScreen> {
         duration: const Duration(seconds: 5),
       ),
     );
+    _simulateAutoFill();
+  }
+
+  @override
+  void dispose() {
+    // Cancelar el listener de SMS al salir de la pantalla
+    SmsAutoFill().unregisterListener();
+    cancel();
+    super.dispose();
   }
 
   @override
@@ -129,15 +199,9 @@ class _OtpScreenState extends State<OtpScreen> {
                 children: [
                   const SizedBox(height: 12),
 
-                  // Icon
-                  Icon(
-                    Icons.smartphone_rounded,
-                    size: 56,
-                    color: colorScheme.primary,
-                  ),
+                  Icon(Icons.sms_rounded, size: 56, color: colorScheme.primary),
                   const SizedBox(height: 16),
 
-                  // Headline
                   Text(
                     'Código de verificación',
                     textAlign: TextAlign.center,
@@ -147,15 +211,33 @@ class _OtpScreenState extends State<OtpScreen> {
                   ),
                   const SizedBox(height: 8),
 
-                  // Masked email
                   Text(
                     'Código enviado a ${Validators.maskEmail(provider.email)}',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: colorScheme.outline),
                   ),
-                  const SizedBox(height: 36),
-
-                  // OTP boxes
+                  const SizedBox(height: 4),
+                  // Badge que indica que el autofill de SMS está activo
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.sensors, size: 14, color: Colors.green.shade600),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          'Detección automática de SMS activa',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.green.shade600,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 28),
                   OtpInputField(
                     key: _otpFieldKey,
                     length: AppConstants.otpLength,
@@ -241,15 +323,18 @@ class _CountdownWidget extends StatelessWidget {
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
       children: [
         Icon(Icons.timer_outlined, size: 20, color: countdownColor),
         const SizedBox(width: 6),
-        Text(
-          'Expira en ${provider.formattedCountdown}',
-          style: TextStyle(
-            color: countdownColor,
-            fontWeight: FontWeight.w600,
-            fontSize: 15,
+        Flexible(
+          child: Text(
+            'Expira en ${provider.formattedCountdown}',
+            style: TextStyle(
+              color: countdownColor,
+              fontWeight: FontWeight.w600,
+              fontSize: 15,
+            ),
           ),
         ),
       ],
@@ -263,12 +348,16 @@ class _CountdownWidget extends StatelessWidget {
   }) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
       children: [
         Icon(icon, size: 20, color: color),
         const SizedBox(width: 6),
-        Text(
-          label,
-          style: TextStyle(color: color, fontWeight: FontWeight.w600),
+        Flexible(
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: color, fontWeight: FontWeight.w600),
+          ),
         ),
       ],
     );

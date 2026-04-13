@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -45,25 +46,46 @@ class OtpInputFieldState extends State<OtpInputField> {
     for (final c in _controllers) {
       c.clear();
     }
-    if (widget.enabled) {
+    if (widget.enabled && mounted) {
       FocusScope.of(context).requestFocus(_focusNodes[0]);
     }
   }
 
-  String get currentValue =>
-      _controllers.map((c) => c.text).join();
+  /// Rellena automáticamente las cajas con el código recibido (SMS autofill).
+  void fillCode(String code) {
+    final digits = code.replaceAll(RegExp(r'\D'), '');
+    final len = min(digits.length, widget.length);
+    for (int i = 0; i < len; i++) {
+      _controllers[i].text = digits[i];
+    }
+    widget.onChanged();
+    if (digits.length >= widget.length) {
+      _focusNodes.last.unfocus();
+      widget.onCompleted(digits.substring(0, widget.length));
+    }
+  }
+
+  String get currentValue => _controllers.map((c) => c.text).join();
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(widget.length, (i) {
-        return Container(
-          width: 46,
-          height: 56,
-          margin: const EdgeInsets.symmetric(horizontal: 5),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const double margin = 5;
+        final double boxWidth =
+            ((constraints.maxWidth - widget.length * margin * 2) / widget.length)
+                .clamp(36.0, 52.0);
+        final double boxHeight = boxWidth * 1.2;
+
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(widget.length, (i) {
+            return Container(
+              width: boxWidth,
+              height: boxHeight,
+              margin: const EdgeInsets.symmetric(horizontal: margin),
           child: KeyboardListener(
             focusNode: FocusNode(),
             onKeyEvent: (event) {
@@ -123,6 +145,8 @@ class OtpInputFieldState extends State<OtpInputField> {
           ),
         );
       }),
+        );
+      },
     );
   }
 }
